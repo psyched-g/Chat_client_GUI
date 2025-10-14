@@ -30,7 +30,7 @@ gboolean update_text_view(gpointer user_data) {
 void *receive_messages_thread(void *arg) {
     char buffer[512];
     int n;
-    while ((n = recv(sockfd, buffer, sizeof(buffer)-1, 0)) > 0) {
+    while ((n = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[n] = '\0';
         g_idle_add(update_text_view, g_strdup(buffer));
     }
@@ -42,12 +42,10 @@ void send_message(GtkWidget *widget, gpointer data) {
     const gchar *msg = gtk_entry_get_text(GTK_ENTRY(entry));
     if (strlen(msg) == 0) return;
 
-    // ------------------ Show own message in text view ------------------
+    // Show own message
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
     GtkTextIter end;
     gtk_text_buffer_get_end_iter(buffer, &end);
-
-    // Format your message (optional)
     gchar *display_msg = g_strdup_printf("[You]: %s\n", msg);
     gtk_text_buffer_insert(buffer, &end, display_msg, -1);
     g_free(display_msg);
@@ -56,34 +54,40 @@ void send_message(GtkWidget *widget, gpointer data) {
     GtkAdjustment *adj = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(gtk_widget_get_parent(text_view)));
     gtk_adjustment_set_value(adj, gtk_adjustment_get_upper(adj));
 
-    // ------------------ Send to server ------------------
+    // Send to server
     send(sockfd, msg, (int)strlen(msg), 0);
 
     // Clear entry
     gtk_entry_set_text(GTK_ENTRY(entry), "");
 }
 
-
-
 // ------------------ Connect to server ------------------
-int connect_to_server(const char *ip, int port, const char *username) {
+int connect_to_server(const char *ip, int port, const char *username, const char *password) {
     struct sockaddr_in server_addr;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == INVALID_SOCKET) { printf("Socket creation failed\n"); return -1; }
+    if (sockfd == INVALID_SOCKET) {
+        printf("Socket creation failed\n");
+        return -1;
+    }
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
-        printf("Invalid address\n"); return -1;
+        printf("Invalid address\n");
+        return -1;
     }
 
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        printf("Connection Failed\n"); return -1;
+        printf("Connection Failed\n");
+        return -1;
     }
 
-    // Send username to server
+    // Send username first
     send(sockfd, username, (int)strlen(username), 0);
+    Sleep(100); // short delay to ensure order
+    // Send password next
+    send(sockfd, password, (int)strlen(password), 0);
 
     // Start receive thread
     pthread_t recv_thread;
@@ -93,8 +97,8 @@ int connect_to_server(const char *ip, int port, const char *username) {
     return 0;
 }
 
-// ------------------ Get input via GTK dialog ------------------
-gchar* get_text_dialog(const char *title, const char *default_text) {
+// ------------------ Text input dialogs ------------------
+gchar *get_text_dialog(const char *title, const char *default_text, gboolean hide_text) {
     GtkWidget *dialog, *entry;
     gchar *result = NULL;
 
@@ -103,7 +107,11 @@ gchar* get_text_dialog(const char *title, const char *default_text) {
                                          "_Cancel", GTK_RESPONSE_CANCEL,
                                          NULL);
     entry = gtk_entry_new();
-    if (default_text) gtk_entry_set_text(GTK_ENTRY(entry), default_text);
+    if (hide_text)
+        gtk_entry_set_visibility(GTK_ENTRY(entry), FALSE);
+    if (default_text)
+        gtk_entry_set_text(GTK_ENTRY(entry), default_text);
+
     gtk_box_pack_start(GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), entry, TRUE, TRUE, 0);
     gtk_widget_show_all(dialog);
 
@@ -117,40 +125,45 @@ gchar* get_text_dialog(const char *title, const char *default_text) {
 // ------------------ Main GUI ------------------
 int main(int argc, char *argv[]) {
     GtkWidget *window, *vbox, *scrolled_window, *button;
-    GtkCssProvider *css_provider;
-    GtkStyleContext *context;
 
     gtk_init(&argc, &argv);
 
-    // ------------------ Initialize Winsock ------------------
+    // Initialize Winsock
     WSADATA wsa;
-    if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         printf("Winsock initialization failed: %d\n", WSAGetLastError());
         return 1;
     }
 
-    // ------------------ Get server info and username ------------------
-    gchar *server_ip = get_text_dialog("Server IP", "127.0.0.1");
+    // ------------------ Get connection info ------------------
+    gchar *server_ip = get_text_dialog("Server IP", "127.0.0.1", FALSE);
     if (!server_ip) return 0;
-    gchar *port_str = get_text_dialog("Port", "12345");
+
+    gchar *port_str = get_text_dialog("Port", "8080", FALSE);
     if (!port_str) { g_free(server_ip); return 0; }
     int port = atoi(port_str);
     g_free(port_str);
 
-    gchar *username = get_text_dialog("Username", "User");
+    gchar *username = get_text_dialog("Username", "User", FALSE);
     if (!username) { g_free(server_ip); return 0; }
 
-    if (connect_to_server(server_ip, port, username) < 0) {
+    gchar *password = get_text_dialog("Password", "", TRUE);
+    if (!password) { g_free(server_ip); g_free(username); return 0; }
+
+    if (connect_to_server(server_ip, port, username, password) < 0) {
         printf("Failed to connect to server.\n");
         g_free(server_ip);
         g_free(username);
+        g_free(password);
         WSACleanup();
         return 1;
     }
+
     g_free(server_ip);
     g_free(username);
+    g_free(password);
 
-    // ------------------ GTK Window ------------------
+    // ------------------ GTK Chat Window ------------------
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Chat App");
     gtk_window_set_default_size(GTK_WINDOW(window), 400, 500);
@@ -178,29 +191,9 @@ int main(int argc, char *argv[]) {
     g_signal_connect(button, "clicked", G_CALLBACK(send_message), NULL);
     g_signal_connect(entry, "activate", G_CALLBACK(send_message), NULL);
 
-    // CSS styling
-    css_provider = gtk_css_provider_new();
-    GError *error = NULL;
-    gtk_css_provider_load_from_data(css_provider,
-        "window { background-color: #2C3E50; }"
-        "GtkTextView { color: #ECF0F1; font-size: 14px; }"
-        "GtkEntry { font-size: 14px; }"
-        "GtkButton { background-color: #3498DB; color: white; font-weight: bold; }",
-        -1,
-        &error);
-
-    if (error) {
-        g_printerr("Error loading CSS: %s\n", error->message);
-        g_error_free(error);
-    }
-
-    context = gtk_widget_get_style_context(window);
-    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(css_provider), GTK_STYLE_PROVIDER_PRIORITY_USER);
-
     gtk_widget_show_all(window);
     gtk_main();
 
-    // ------------------ Cleanup ------------------
     closesocket(sockfd);
     WSACleanup();
     return 0;
