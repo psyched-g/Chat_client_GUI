@@ -1,0 +1,11 @@
+# depslib dependency file v1.0
+1759769786 source:c:\users\gauth\onedrive\documents\work\mtech\esde\gtklearn\main.c
+	<gtk/gtk.h>
+	<pthread.h>
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<winsock2.h>
+	<ws2tcpip.h>
+	<windows.h>
+
