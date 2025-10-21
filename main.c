@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <winsock2.h>
-#include <ws2tcpip.h>
 #include <windows.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib,"ws2_32.lib")
 
 // ------------------ Global widgets ------------------
 GtkWidget *text_view;
@@ -42,7 +44,6 @@ void send_message(GtkWidget *widget, gpointer data) {
     const gchar *msg = gtk_entry_get_text(GTK_ENTRY(entry));
     if (strlen(msg) == 0) return;
 
-    // Show own message
     GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(text_view));
     GtkTextIter end;
     gtk_text_buffer_get_end_iter(buffer, &end);
@@ -54,15 +55,12 @@ void send_message(GtkWidget *widget, gpointer data) {
     GtkAdjustment *adj = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(gtk_widget_get_parent(text_view)));
     gtk_adjustment_set_value(adj, gtk_adjustment_get_upper(adj));
 
-    // Send to server
     send(sockfd, msg, (int)strlen(msg), 0);
-
-    // Clear entry
     gtk_entry_set_text(GTK_ENTRY(entry), "");
 }
 
 // ------------------ Connect to server ------------------
-int connect_to_server(const char *ip, int port, const char *username, const char *password) {
+int connect_to_server(const char *host, int port, const char *username, const char *password) {
     struct sockaddr_in server_addr;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -73,23 +71,25 @@ int connect_to_server(const char *ip, int port, const char *username, const char
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
-        printf("Invalid address\n");
+
+    // Resolve hostname
+    struct hostent *he = gethostbyname(host);
+    if (!he) {
+        printf("DNS lookup failed for %s\n", host);
         return -1;
     }
+    memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
 
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        printf("Connection Failed\n");
+        printf("Connection Failed. WSAGetLastError=%d\n", WSAGetLastError());
         return -1;
     }
 
-    // Send username first
+    // Send username and password
     send(sockfd, username, (int)strlen(username), 0);
-    Sleep(100); // short delay to ensure order
-    // Send password next
+    Sleep(100);
     send(sockfd, password, (int)strlen(password), 0);
 
-    // Start receive thread
     pthread_t recv_thread;
     pthread_create(&recv_thread, NULL, receive_messages_thread, NULL);
     pthread_detach(recv_thread);
@@ -128,18 +128,16 @@ int main(int argc, char *argv[]) {
 
     gtk_init(&argc, &argv);
 
-    // Initialize Winsock
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         printf("Winsock initialization failed: %d\n", WSAGetLastError());
         return 1;
     }
 
-    // ------------------ Get connection info ------------------
-    gchar *server_ip = get_text_dialog("Server IP", "127.0.0.1", FALSE);
+    gchar *server_ip = get_text_dialog("Server Hostname", "0.tcp.in.ngrok.io", FALSE);
     if (!server_ip) return 0;
 
-    gchar *port_str = get_text_dialog("Port", "8080", FALSE);
+    gchar *port_str = get_text_dialog("Port", "15520", FALSE);
     if (!port_str) { g_free(server_ip); return 0; }
     int port = atoi(port_str);
     g_free(port_str);
@@ -163,7 +161,7 @@ int main(int argc, char *argv[]) {
     g_free(username);
     g_free(password);
 
-    // ------------------ GTK Chat Window ------------------
+    // GTK Chat Window
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Chat App");
     gtk_window_set_default_size(GTK_WINDOW(window), 400, 500);
