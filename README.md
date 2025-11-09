@@ -5,7 +5,7 @@ Supports connecting to local servers or remote servers via **ngrok TCP tunnels**
 =======
 A simple **GUI-based chat client** built using **GTK** and **Winsock** for Windows.  
 It allows users to connect to a TCP server, send and receive messages in real-time, and provides a thread-safe chat interface.
->>>>>>> 434bae919a6c38d3e80401545e073b912e01d3ac
+
 
 ---
 
