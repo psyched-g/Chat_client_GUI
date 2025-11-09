@@ -32,4 +32,3 @@ It allows users to connect to a TCP server, send and receive messages in real-ti
 - **GTK3** development libraries ([Installation Guide](https://www.gtk.org/docs/installations/windows/))
 - C Compiler (e.g., GCC with MinGW)
 - Winsock (included in Windows SDK)
->>>>>>> 434bae919a6c38d3e80401545e073b912e01d3ac
