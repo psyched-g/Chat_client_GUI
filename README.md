@@ -1,6 +1,5 @@
 # GTK TCP Chat Client (Windows)
 
-<<<<<<< HEAD
 A simple cross-platform **TCP chat client** with GUI using **GTK+** on Windows.  
 Supports connecting to local servers or remote servers via **ngrok TCP tunnels**.
 =======
@@ -11,8 +10,6 @@ It allows users to connect to a TCP server, send and receive messages in real-ti
 ---
 
 ## Features
-
-<<<<<<< HEAD
 - GUI chat interface using GTK+ (`GtkTextView` + `GtkEntry`)
 - Thread-safe message updates
 - Private and public messages support (if server supports it)
